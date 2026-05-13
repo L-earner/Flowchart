@@ -15,7 +15,7 @@ A full-stack web application that lets auditors convert process walkthrough note
 ### Prerequisites
 
 - Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com/)
+- An [OpenAI API key](https://platform.openai.com/api-keys)
 
 ### Setup
 
@@ -25,7 +25,7 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=your_key_here
+# Edit .env and set OPENAI_API_KEY=your_key_here
 
 # 3. Start the app (API server + frontend together)
 npm run dev
@@ -81,7 +81,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 - **Frontend**: React 19, TypeScript, Vite
 - **Backend**: Express.js
-- **AI**: Anthropic Claude (`claude-sonnet-4-6`)
+- **AI**: OpenAI (`gpt-4o`)
 - **Diagrams**: Mermaid.js v11
 - **File parsing**: mammoth (DOCX), pdfjs-dist (PDF)
 - **Export**: jsPDF, file-saver

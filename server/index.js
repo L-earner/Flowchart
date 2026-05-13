@@ -1,5 +1,5 @@
 import express from 'express';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,9 +24,9 @@ Strict rules:
 8. Do not include any HTML or special characters that break Mermaid parsing`;
 
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-  return new Anthropic({ apiKey });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY environment variable is not set');
+  return new OpenAI({ apiKey });
 }
 
 app.post('/api/generate', async (req, res) => {
@@ -44,14 +44,17 @@ ${instructions && instructions.trim() ? `Auditor Instructions:\n${instructions.t
 Create a Mermaid flowchart diagram that accurately represents this process.`;
 
     const client = getClient();
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
+      temperature: 0.2,
     });
 
-    let mermaidCode = message.content[0].text.trim();
+    let mermaidCode = completion.choices[0].message.content?.trim() ?? '';
     // Strip any accidental markdown fences
     mermaidCode = mermaidCode.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 
@@ -79,14 +82,17 @@ ${refinementInstructions.trim()}
 Return the updated Mermaid flowchart syntax only.`;
 
     const client = getClient();
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
+      temperature: 0.2,
     });
 
-    let mermaidCode = message.content[0].text.trim();
+    let mermaidCode = completion.choices[0].message.content?.trim() ?? '';
     mermaidCode = mermaidCode.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 
     res.json({ mermaidCode });

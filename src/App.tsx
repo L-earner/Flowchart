@@ -104,7 +104,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <span>Powered by Claude AI &mdash; For internal audit use only</span>
+        <span>Powered by OpenAI &mdash; For internal audit use only</span>
       </footer>
     </div>
   );
