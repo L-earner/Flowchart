@@ -81,7 +81,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 - **Frontend**: React 19, TypeScript, Vite
 - **Backend**: Express.js
-- **AI**: OpenAI (`gpt-4o`)
+- **AI**: OpenAI (`gpt-5.4-mini`)
 - **Diagrams**: Mermaid.js v11
 - **File parsing**: mammoth (DOCX), pdfjs-dist (PDF)
 - **Export**: jsPDF, file-saver
