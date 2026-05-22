@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import InputScreen from './components/InputScreen';
 import DiagramScreen from './components/DiagramScreen';
-import type { AppStep } from './types';
+import type { AppStep, DiagramLib } from './types';
 import './App.css';
 
-async function apiFetch(path: string, body: Record<string, string>): Promise<{ mermaidCode: string }> {
+async function apiFetch(path: string, body: Record<string, string>): Promise<{ diagramCode: string }> {
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -17,16 +17,22 @@ async function apiFetch(path: string, body: Record<string, string>): Promise<{ m
 
 export default function App() {
   const [step, setStep] = useState<AppStep>('input');
-  const [mermaidCode, setMermaidCode] = useState('');
+  const [diagramCode, setDiagramCode] = useState('');
+  const [diagramLib, setDiagramLib] = useState<DiagramLib>('mermaid');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (processText: string, instructions: string) => {
+  const handleGenerate = async (processText: string, instructions: string, lib: DiagramLib) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { mermaidCode: code } = await apiFetch('/api/generate', { processText, instructions });
-      setMermaidCode(code);
+      const { diagramCode: code } = await apiFetch('/api/generate', {
+        processText,
+        instructions,
+        diagramLib: lib,
+      });
+      setDiagramCode(code);
+      setDiagramLib(lib);
       setStep('diagram');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to generate diagram. Please try again.');
@@ -39,11 +45,12 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const { mermaidCode: code } = await apiFetch('/api/refine', {
-        currentMermaid: mermaidCode,
+      const { diagramCode: code } = await apiFetch('/api/refine', {
+        currentDiagram: diagramCode,
         refinementInstructions,
+        diagramLib,
       });
-      setMermaidCode(code);
+      setDiagramCode(code);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to refine diagram. Please try again.');
     } finally {
@@ -55,6 +62,8 @@ export default function App() {
     setStep('input');
     setError(null);
   };
+
+  const handleDirectEdit = (code: string) => setDiagramCode(code);
 
   return (
     <div className="app">
@@ -94,9 +103,11 @@ export default function App() {
           />
         ) : (
           <DiagramScreen
-            mermaidCode={mermaidCode}
+            diagramCode={diagramCode}
+            diagramLib={diagramLib}
             onRefine={handleRefine}
             onBack={handleBack}
+            onDirectEdit={handleDirectEdit}
             isLoading={isLoading}
             error={error}
           />
