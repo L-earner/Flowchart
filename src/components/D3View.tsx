@@ -291,10 +291,20 @@ export default function D3View({ code, onCodeChange }: Props) {
 
       if (e.label) {
         const sp = pos[e.source], tp = pos[e.target];
-        if (sp && tp) {
-          const mx = (sp.x + tp.x) / 2, my = (sp.y + tp.y) / 2;
+        const sn = graph.nodes.find(n => n.id === e.source);
+        const tn = graph.nodes.find(n => n.id === e.target);
+        if (sp && tp && sn && tn) {
+          const sh = NODE_H[sn.type] ?? 52, th = NODE_H[tn.type] ?? 52;
+          const sw = NODE_W[sn.type] ?? 180, tw = NODE_W[tn.type] ?? 180;
+          const mx = direction === 'LR'
+            ? (sp.x + sw / 2 + tp.x - tw / 2) / 2
+            : (sp.x + tp.x) / 2;
+          const my = direction === 'LR'
+            ? (sp.y + tp.y) / 2
+            : (sp.y + sh / 2 + tp.y - th / 2) / 2;
+          const lw = Math.max(44, e.label.length * 7 + 16);
           root.append('rect').attr('class', 'edge-lbg').attr('data-ei', i)
-            .attr('x', mx - 22).attr('y', my - 9).attr('width', 44).attr('height', 18)
+            .attr('x', mx - lw / 2).attr('y', my - 9).attr('width', lw).attr('height', 18)
             .attr('rx', 3).attr('fill', '#fff')
             .attr('stroke', isSelected ? '#2563eb' : '#e2e8f0').attr('stroke-width', 1);
           root.append('text').attr('class', 'edge-ltxt').attr('data-ei', i)
@@ -374,10 +384,23 @@ export default function D3View({ code, onCodeChange }: Props) {
               root.selectAll<SVGPathElement, unknown>(`path[data-ei="${idx}"]`).attr('d', newD);
               if (edge.label) {
                 const sp2 = livePos.current[edge.source], tp2 = livePos.current[edge.target];
-                if (sp2 && tp2) {
-                  const mx = (sp2.x + tp2.x) / 2, my = (sp2.y + tp2.y) / 2;
-                  root.select<SVGRectElement>(`rect.edge-lbg[data-ei="${idx}"]`).attr('x', mx - 22).attr('y', my - 9);
-                  root.select<SVGTextElement>(`text.edge-ltxt[data-ei="${idx}"]`).attr('x', mx).attr('y', my);
+                const g2 = graphRef.current;
+                if (sp2 && tp2 && g2) {
+                  const sn2 = g2.nodes.find(n => n.id === edge.source);
+                  const tn2 = g2.nodes.find(n => n.id === edge.target);
+                  if (sn2 && tn2) {
+                    const sh2 = NODE_H[sn2.type] ?? 52, th2 = NODE_H[tn2.type] ?? 52;
+                    const sw2 = NODE_W[sn2.type] ?? 180, tw2 = NODE_W[tn2.type] ?? 180;
+                    const mx2 = direction === 'LR'
+                      ? (sp2.x + sw2 / 2 + tp2.x - tw2 / 2) / 2
+                      : (sp2.x + tp2.x) / 2;
+                    const my2 = direction === 'LR'
+                      ? (sp2.y + tp2.y) / 2
+                      : (sp2.y + sh2 / 2 + tp2.y - th2 / 2) / 2;
+                    const lw2 = Math.max(44, (edge.label.length) * 7 + 16);
+                    root.select<SVGRectElement>(`rect.edge-lbg[data-ei="${idx}"]`).attr('x', mx2 - lw2 / 2).attr('y', my2 - 9);
+                    root.select<SVGTextElement>(`text.edge-ltxt[data-ei="${idx}"]`).attr('x', mx2).attr('y', my2);
+                  }
                 }
               }
             });

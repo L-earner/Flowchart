@@ -20,61 +20,127 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 *
 const samplesDir = path.join(__dirname, '../public/samples');
 app.use('/samples', express.static(samplesDir));
 
-const MERMAID_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Your task is to analyze process documentation and produce accurate, clear, visually professional process flow diagrams using Mermaid.js flowchart syntax.
+const MERMAID_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Analyze the process documentation and return a single, complete, valid Mermaid.js flowchart — nothing else.
 
-Strict rules:
-1. Return ONLY valid Mermaid flowchart syntax — no prose, no markdown fences, no backticks, no explanations
-2. Always start with "flowchart TD" (top-down) unless the user explicitly requests a different direction
-3. Keep node labels concise (under 45 characters); wrap longer text with quotes
-4. Use decision diamonds { } for all conditional steps, approvals, and checks
-5. Use subgraphs to group related phases — every subgraph must have a short, clear title (e.g., subgraph INITIATION["Initiation"], subgraph REVIEW["Review & Approval"]) — do not include any emojis in subgraph titles or anywhere else in the diagram
-6. Assign short, descriptive IDs to every node (e.g., START, REQ1, DEC_APPROVAL, END)
-7. The resulting syntax must be valid and renderable by Mermaid v10+
-8. Do not include any HTML or special characters that break Mermaid parsing
+OUTPUT FORMAT (non-negotiable):
+- Return ONLY Mermaid flowchart syntax. No prose, no markdown fences, no backticks, no explanations.
+- The very first line must be exactly: flowchart TD
+- Use flowchart LR only if the user explicitly requests a left-to-right layout.
 
-Visual style — keep it simple black and white:
-9. Do NOT use classDef colour styling — the diagram must be black on white
-10. Use ([Label]) stadium shape for START and END nodes only, to distinguish them from process boxes
-11. All other nodes use standard rectangle [ ] or diamond { } shapes — no fill colours`;
+NODE IDs:
+- Use short SCREAMING_SNAKE_CASE IDs: PROC_START, RECV_REQUEST, DEC_APPROVAL, END_REJECTED
+- NEVER use these reserved words as node IDs: end, start, stop, graph, flowchart, subgraph, direction, style, classDef, click — they will silently break the diagram
 
-const FLOWCHART_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Your task is to analyze process documentation and produce accurate, clear process flow diagrams using flowchart.js DSL syntax.
+NODE LABELS:
+- Keep labels under 45 characters. Always wrap labels in double quotes: A["Label text here"]
+- NEVER place unescaped special characters inside labels — these all break Mermaid parsing: ( ) [ ] { } # : / \\ "
+  Replace with plain words: "and" instead of "&", "or" not "/", "check" not "(check)"
 
-Strict rules:
-1. Return ONLY valid flowchart.js DSL — no prose, no markdown fences, no backticks, no explanations
-2. Define ALL nodes first (one per line), then ALL connections (one per line)
-3. Node definition format: id=>type: Label
-4. Valid node types: start, end, operation, condition, subroutine, inputoutput
-5. Every diagram must have exactly one start node and at least one end node
-6. Condition nodes must have both (yes) and (no) branches defined in connections
-7. Keep labels concise (under 45 characters); always include a space after the colon
-8. Use short camelCase IDs (e.g., start1, checkApproval, processInvoice, endSuccess)
-9. Do not include any emojis, HTML, or special characters in labels
-10. Do not use colons or special punctuation inside labels
+NODE SHAPES:
+- ([Label])  — terminal nodes only: exactly one START and at least one END
+- {Label}    — every decision, approval, condition, or check
+- [Label]    — all other process steps
+- No other shapes. No fill colours. No classDef, style, or linkStyle directives.
 
-Connection format rules:
+DECISION BRANCHES (critical):
+- Every diamond {decision} MUST have all outgoing edges labeled — binary decisions get two, multi-outcome decisions get one per outcome:
+    DEC_APPROVAL -->|Approved| NEXT_STEP
+    DEC_APPROVAL -->|Rejected| END_REJECTED
+    DECISION -->|Approved| APPROVE_FILE
+    DECISION -->|Conditional| COND_FILE
+    DECISION -->|Declined| DECLINE_FILE
+- Use concise branch labels: Yes/No, Approved/Rejected, Pass/Fail, Conditional, Incomplete
+- Unlabeled edges on decision nodes will make the diagram unreadable
+
+CONNECTIONS:
+- Every node must appear in at least one connection — no orphan nodes
+- Every path must eventually reach a terminal END node — no dead ends
+- Label edges ONLY on decision branches; all other edges are unlabeled arrows
+
+SUBGRAPHS:
+- Use subgraphs to group 3 or more steps that belong to the same phase or owner
+- Always prefix subgraph IDs with PHASE_: PHASE_INTAKE, PHASE_REVIEW, PHASE_APPROVAL
+- Subgraph IDs share the same namespace as node IDs — a subgraph ID must NEVER match any node ID or Mermaid will crash with a cycle error
+- Format: subgraph PHASE_INTAKE["Intake"]\n  ...\nend
+- Do not nest subgraphs inside other subgraphs
+- No emojis anywhere in the diagram
+
+DIAGRAM QUALITY:
+- Aim for 10–25 nodes. Consolidate minor steps; expand all decision points and exception paths.
+- Capture every approval gate, exception path, and rejection loop mentioned in the documentation.
+- The diagram must be fully self-explanatory without the source document.`;
+
+const FLOWCHART_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Analyze the process documentation and return a single, complete, valid flowchart.js DSL diagram — nothing else.
+
+OUTPUT FORMAT (non-negotiable):
+- Return ONLY flowchart.js DSL. No prose, no markdown fences, no backticks, no explanations.
+- Structure: define ALL nodes first (one per line), then ALL connections (one per line). Never mix them.
+
+NODE DEFINITIONS — format: id=>type: Label
+- Valid types: start, end, operation, condition, subroutine, inputoutput
+  - start / end       — terminal nodes (rounded rectangle)
+  - operation         — standard process step (rectangle)
+  - condition         — decision or approval check (diamond) — yes/no branches required
+  - subroutine        — step that refers to a separate documented sub-process (double-bordered box)
+  - inputoutput       — data input or output step (parallelogram)
+- Every diagram must have exactly one start node and at least one end node
+- Always include a space after the colon: id=>operation: Label text
+
+NODE IDs:
+- Use short camelCase IDs: startProcess, checkApproval, processInvoice, endApproved
+- NEVER use these as IDs — they are reserved words that break the parser: yes, no, end, start
+  Use endApproved, endRejected, startProcess instead
+
+NODE LABELS:
+- Keep labels under 40 characters
+- NEVER include these characters inside labels — they break DSL parsing: : -> => ( ) % # "
+  Rephrase to avoid them: "and" not "&", "or" not "/", "check" not "(check)"
+- No emojis anywhere
+
+CONNECTIONS:
 - Basic flow: nodeA->nodeB
-- Condition branches: cond(yes)->nodeA and cond(no)->nodeB on separate lines
-- Direction hint (optional): cond(yes,right)->nodeA
-- Every node must be reachable and every path must lead to an end node`;
+- Condition branches (both required for every condition node):
+    cond(yes)->nodeA
+    cond(no)->nodeB
+- Optional direction hint: cond(yes,right)->nodeA
+- Every node must appear in at least one connection — no orphan nodes
+- Every path must lead to an end node — no dead ends
+- The yes/no branch labels are rendered automatically — do not try to customise them in the DSL
 
-const D3_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Your task is to analyze process documentation and produce accurate, clear process flow diagrams as a JSON graph structure to be rendered with D3.js.
+DIAGRAM QUALITY:
+- Aim for 8–20 nodes. Consolidate minor steps; preserve all decision and exception paths.
+- Capture every approval gate, exception path, and rejection route in the documentation.`;
 
-Strict rules:
-1. Return ONLY a single valid JSON object — no prose, no markdown fences, no backticks, no explanations
-2. The JSON must have exactly this shape:
-   { "direction": "TD", "nodes": [...], "edges": [...] }
-3. "direction" must be "TD" (top-down) or "LR" (left-right)
-4. Each node object: { "id": "string", "label": "string", "type": "process"|"decision"|"terminal" }
-   - "terminal" for START and END nodes only
-   - "decision" for conditional steps, approvals, and checks
-   - "process" for all other steps
-5. Each edge object: { "source": "nodeId", "target": "nodeId", "label": "string" }
-   - "label" is optional — use short text like "Yes", "No", "Approved", "Rejected" only on decision branches
-6. Keep node labels concise (under 45 characters)
-7. Use short camelCase IDs (e.g., "start", "reviewInvoice", "checkApproval", "end")
-8. Every node must be reachable and every path must lead to a terminal end node
-9. Do not include any emojis, HTML, or special characters in labels or IDs
-10. The JSON must be valid — no trailing commas, no comments`;
+const D3_SYSTEM_PROMPT = `You are an expert process flow diagram creator for auditors. Analyze the process documentation and return a single, complete, valid JSON graph — nothing else.
+
+OUTPUT FORMAT (non-negotiable):
+- Return ONLY a single valid JSON object. No prose, no markdown fences, no backticks, no explanations.
+- The JSON must have exactly this shape:
+  { "direction": "TD", "nodes": [...], "edges": [...] }
+- "direction": "TD" (top-down, default) or "LR" (left-right, only if user requests it)
+- Invalid JSON causes a render failure — no trailing commas, no comments, no extra keys
+
+NODES — each object: { "id": "string", "label": "string", "type": "process"|"decision"|"terminal" }
+- "terminal"  — exactly one START node and at least one END node; rendered as a pill shape
+- "decision"  — every conditional check, approval, or branch point; rendered as a diamond
+- "process"   — all other steps; rendered as a rectangle
+- IDs must be unique camelCase strings with no spaces or special characters: "recvApplication", "checkApproval", "endApproved", "endRejected"
+- Keep labels under 45 characters. No emojis, no HTML, no special characters in labels or IDs.
+
+EDGES — each object: { "source": "nodeId", "target": "nodeId", "label": "string" }
+- "label" is optional — add it ONLY on branches from decision nodes
+- Edge labels must be 12 characters or fewer: "Yes", "No", "Approved", "Rejected", "Pass", "Fail"
+- Every decision node must have all its outgoing edges labeled
+- No edge label on non-decision connections
+
+CONNECTIONS:
+- Every node must appear in at least one edge — no orphan nodes
+- Every path must eventually reach a terminal END node — no dead ends
+- Node IDs in edges must exactly match IDs defined in the nodes array
+
+DIAGRAM QUALITY:
+- Aim for 10–25 nodes. Consolidate minor steps; preserve all decision points and exception paths.
+- Capture every approval gate, rejection route, and loop-back in the documentation.`;
 
 function getClient() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -109,12 +175,18 @@ app.post('/api/generate', async (req, res) => {
       : diagramLib === 'd3' ? 'D3.js JSON graph'
       : 'Mermaid';
 
+    const isMermaid = diagramLib === 'mermaid';
     const userMessage = `Process Documentation:
 ${processText.trim()}
 
-${instructions && instructions.trim() ? `Auditor Instructions:\n${instructions.trim()}` : ''}
+${instructions && instructions.trim() ? `Auditor Instructions:\n${instructions.trim()}\n` : ''}${isMermaid ? `
+Before writing any syntax, silently identify:
+1. The main phases or departments involved
+2. Every process step within each phase
+3. All decision points, approvals, and conditional checks
+4. All exception paths, rejection loops, and alternative outcomes
 
-Create a ${libLabel} diagram that accurately represents this process.`;
+Then produce the complete Mermaid flowchart. Output the diagram syntax only — no commentary.` : `Create a ${libLabel} diagram that accurately represents this process.`}`;
 
     const client = getClient();
     const completion = await client.chat.completions.create({
@@ -123,8 +195,7 @@ Create a ${libLabel} diagram that accurately represents this process.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      max_tokens: 4096,
-      temperature: 0.2,
+      temperature: 0.1,
     });
 
     let diagramCode = completion.choices[0].message.content?.trim() ?? '';
@@ -167,8 +238,7 @@ Return the updated ${libLabel} diagram syntax only.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      max_tokens: 4096,
-      temperature: 0.2,
+      temperature: 0.1,
     });
 
     let diagramCode = completion.choices[0].message.content?.trim() ?? '';
